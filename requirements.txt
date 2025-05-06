@@ -1,0 +1,7 @@
+gradio==5.29.0
+gradio_client==1.10.0
+numpy==2.2.5
+orjson==3.10.18
+packaging==25.0
+pandas==2.2.3
+pillow==11.2.1

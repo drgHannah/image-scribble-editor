@@ -10,7 +10,7 @@ import argparse
 import os
 from PIL import Image
 import numpy as np
-
+import gc
 
 def main():
     """
@@ -164,12 +164,7 @@ def main():
             # otherwise jump to that index (step=0 just reloads)
             return navigate(image_files.index(name), 0)
 
-        # # wire it up
-        # filename_display.change(
-        #     fn=load_by_name,
-        #     inputs=[filename_display, idx_state],
-        #     outputs=[idx_state, editor, filename_display, scribble_mark, existing_display]
-        # )
+
         filename_display.submit(
             fn=load_by_name,
             inputs=[filename_display, idx_state],
@@ -208,13 +203,17 @@ def main():
             """
             new_idx = max(0, min(idx + step, len(image_files) - 1))
             name = image_files[new_idx]
-            img = Image.open(os.path.join(image_dir, name)).convert("RGB")
+            
+            with Image.open(os.path.join(image_dir, name)) as f:
+                img = f.convert("RGB")
 
             has_sb = _has_scribble(name)
-            sb_img = (
-                Image.open(_scribble_path(name)).convert("RGB")
-                if has_sb else None
-            )
+            if has_sb:
+                with Image.open(_scribble_path(name)) as sf:
+                    sb_img = sf.convert("RGB")
+            else:
+                sb_img = None
+        
             overlay = _overlay_image(img, sb_img)
 
             editor_state = {"background": img, "layers": [], "composite": img}
@@ -275,19 +274,27 @@ def main():
             final.save(outpath)
 
             # Create new overlay preview
-            orig = Image.open(os.path.join(image_dir, name)).convert("RGB")
+            
+            with Image.open(os.path.join(image_dir, name)) as f:
+                orig = f.convert("RGB")
+
+
             overlay = _overlay_image(orig, final)
+            # build a fresh editor state with no layers:
+            new_editor = {"background": orig, "layers": [], "composite": orig}
 
             # Count after save
             updated = sorted(f for f in os.listdir(scribble_dir) if f.lower().endswith(".png"))
             after_count = len(updated)
 
-            return f"Scribbles saved to: {outpath}", overlay, str(after_count), _status_text(initial_name)
+            final.close()                    # close the mask image
+            gc.collect()                     # suggest Python free unreferenced memory
+            return f"Scribbles saved to: {outpath}", overlay, str(after_count), _status_text(initial_name), new_editor
 
         save_btn.click(
             fn=save_scribbles,
             inputs=[editor, filename_display],
-            outputs=[status, existing_display, scribble_count_display, scribble_mark]
+            outputs=[status, existing_display, scribble_count_display, scribble_mark, editor]
         )
 
     demo.launch()
